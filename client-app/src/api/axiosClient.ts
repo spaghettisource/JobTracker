@@ -5,7 +5,7 @@ import axios, {
     InternalAxiosRequestConfig,
     AxiosHeaders
   } from "axios";
-  import { authStore } from "../store/authStore";
+import { authStore } from "../modules/auth/hooks/useAuthStore";
   
   // ---- helpers ----
   function uuidv4() {
@@ -131,3 +131,9 @@ import axios, {
   
   export default api;
   
+  
+// 🆕 Нов helper метод след export default
+export async function fetchNotifications(): Promise<string[]> {
+    const res = await api.get("/notifications/notifications");
+    return res.data;
+  }

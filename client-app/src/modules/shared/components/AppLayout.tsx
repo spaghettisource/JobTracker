@@ -1,7 +1,9 @@
+
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
-import api from "../api/axiosClient";
-import { authStore } from "../store/authStore";
+import { authStore } from "../../auth/hooks/useAuthStore";
+import api from "../../../api/axiosClient";
+
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();

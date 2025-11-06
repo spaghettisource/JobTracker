@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
-import api from "../api/axiosClient";
-import { authStore } from "../store/authStore";
 import { useNavigate } from "react-router-dom";
+import { authStore } from "../../auth/hooks/useAuthStore";
+import api from "../../../api/axiosClient";
+import CreateApplicationModal from "../components/CreateApplicationModal";
+import NotificationToast from "../../shared/components/NotificationToast";
 
 interface Application {
   id: string;
@@ -17,19 +19,21 @@ export default function DashboardPage() {
   const user = authStore.getState().user;
   const [apps, setApps] = useState<Application[]>([]);
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
+  const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  async function loadApps() {
+    try {
+      const res = await api.get("/application/applications");
+      setApps(res.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
-    const loadApps = async () => {
-      try {
-        const res = await api.get("/application/applications");
-        setApps(res.data);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
     loadApps();
   }, []);
 
@@ -42,6 +46,17 @@ export default function DashboardPage() {
     navigate("/login", { replace: true });
   }
 
+  async function handleDelete(id: string) {
+    if (!window.confirm("Delete this application?")) return;
+    try {
+      await api.delete(`/application/applications/${id}`);
+      setApps(apps.filter((a) => a.id !== id));
+    } catch (err) {
+      console.error(err);
+      alert("Failed to delete application.");
+    }
+  }
+
   return (
     <div className="d-flex" style={{ minHeight: "100vh" }}>
       {/* Sidebar */}
@@ -52,7 +67,7 @@ export default function DashboardPage() {
         <h4 className="fw-bold mb-4">📋 App Tracker</h4>
         <button
           className="btn btn-outline-light mb-3"
-          onClick={() => navigate("/create")}
+          onClick={() => setShowModal(true)}
         >
           ➕ New Application
         </button>
@@ -73,8 +88,9 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="card shadow-sm">
-            <div className="card-header bg-primary text-white">
+            <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
               <h5 className="mb-0">My Applications</h5>
+              <small>{apps.length} total</small>
             </div>
             <div className="card-body p-0">
               <table className="table table-striped mb-0">
@@ -101,10 +117,16 @@ export default function DashboardPage() {
                         <td>{a.notes?.slice(0, 25)}...</td>
                         <td className="text-end">
                           <button
-                            className="btn btn-sm btn-outline-primary"
+                            className="btn btn-sm btn-outline-primary me-2"
                             onClick={() => setSelectedApp(a)}
                           >
                             View
+                          </button>
+                          <button
+                            className="btn btn-sm btn-outline-danger"
+                            onClick={() => handleDelete(a.id)}
+                          >
+                            🗑 Delete
                           </button>
                         </td>
                       </tr>
@@ -177,6 +199,14 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Create modal */}
+      <CreateApplicationModal
+        show={showModal}
+        onClose={() => setShowModal(false)}
+        onCreated={loadApps}
+      />
+                <NotificationToast />
     </div>
   );
 }

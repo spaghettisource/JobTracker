@@ -1,7 +1,9 @@
+
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../api/axiosClient";
-import { authStore } from "../store/authStore";
+import api from "../../../api/axiosClient";
+import { authStore } from "../hooks/useAuthStore";
+
 
 export default function LoginPage() {
   const navigate = useNavigate();
