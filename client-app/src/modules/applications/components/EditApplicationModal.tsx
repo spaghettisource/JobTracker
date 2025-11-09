@@ -1,42 +1,59 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import api from "../../../api/axiosClient";
+import type { Application } from "../types/Application";
 
 interface Props {
   show: boolean;
   onClose: () => void;
-  onCreated: () => void;
+  application: Application | null;
+  onUpdated: () => void;
 }
 
-export default function CreateApplicationModal({ show, onClose, onCreated }: Props) {
+export default function EditApplicationModal({ show, onClose, application, onUpdated }: Props) {
   const [form, setForm] = useState({
     position: "",
     company: "",
     link: "",
     notes: "",
+    status: "Applied",
   });
 
   const [loading, setLoading] = useState(false);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm({ ...form, [e.target.name]: e.target.value });
+  useEffect(() => {
+    if (application) {
+      setForm({
+        position: application.position,
+        company: application.company,
+        link: application.link ?? "",
+        notes: application.notes ?? "",
+        status: application.status,
+      });
+    }
+  }, [application]);
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+  ) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!application) return;
+
     setLoading(true);
     try {
-      await api.post("/applications", form);
-      setForm({ position: "", company: "", link: "", notes: "" });
-      onCreated(); // Refresh Dashboard list
-      onClose();   // Close modal
+      await api.put(`/applications/${application.id}`, form);
+      onUpdated(); // refresh table
+      onClose();
     } catch (err) {
-      console.error("Create failed:", err);
-      alert("❌ Неуспешно създаване на апликацията.");
+      console.error("Update failed:", err);
+      alert("❌ Неуспешно обновяване на апликацията.");
     } finally {
       setLoading(false);
     }
   };
 
-  if (!show) return null;
+  if (!show || !application) return null;
 
   return (
     <div
@@ -49,7 +66,7 @@ export default function CreateApplicationModal({ show, onClose, onCreated }: Pro
       <div className="modal-dialog modal-dialog-centered">
         <div className="modal-content shadow">
           <div className="modal-header">
-            <h5 className="modal-title fw-bold">Create New Application</h5>
+            <h5 className="modal-title fw-bold">Edit Application</h5>
             <button type="button" className="btn-close" onClick={onClose}></button>
           </div>
 
@@ -95,6 +112,19 @@ export default function CreateApplicationModal({ show, onClose, onCreated }: Pro
                     onChange={handleChange}
                   />
                 </div>
+                <div className="col-12">
+                  <select
+                    name="status"
+                    className="form-select"
+                    value={form.status}
+                    onChange={handleChange}
+                  >
+                    <option>Applied</option>
+                    <option>Interview</option>
+                    <option>Offer</option>
+                    <option>Rejected</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -108,7 +138,7 @@ export default function CreateApplicationModal({ show, onClose, onCreated }: Pro
                 Cancel
               </button>
               <button type="submit" className="btn btn-primary" disabled={loading}>
-                {loading ? "Creating..." : "Create"}
+                {loading ? "Saving..." : "Save Changes"}
               </button>
             </div>
           </form>

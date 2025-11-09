@@ -15,5 +15,11 @@ public class ApplicationCreatedConsumer : IConsumer<ApplicationCreated>
         return Task.CompletedTask;
     }
 
-    public static IEnumerable<string> GetAll() => Notifications;
+    // Връща и трие — нотификациите се показват еднократно
+    public static List<string> GetAndClear()
+    {
+        var copy = new List<string>(Notifications);
+        Notifications.Clear();
+        return copy;
+    }
 }

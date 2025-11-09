@@ -3,7 +3,17 @@ using NotificationsService.Consumers;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend",
+        policy => policy
+            .WithOrigins("http://localhost:3000") // React dev server
+            .AllowAnyHeader()
+            .AllowAnyMethod());
+});
+
 builder.Services.AddControllers();
+
 builder.Services.AddMassTransit(x =>
 {
     x.AddConsumer<ApplicationCreatedConsumer>();
@@ -25,12 +35,13 @@ builder.Services.AddMassTransit(x =>
 
 var app = builder.Build();
 
+app.UseCors("AllowFrontend");
+
 app.MapControllers();
 
-// Simple test endpoint to get notifications
 app.MapGet("/api/notifications", () =>
 {
-    return ApplicationCreatedConsumer.GetAll();
+    return ApplicationCreatedConsumer.GetAndClear();
 });
 
 app.Run();

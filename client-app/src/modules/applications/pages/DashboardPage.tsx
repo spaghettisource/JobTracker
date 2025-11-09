@@ -1,212 +1,245 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { authStore } from "../../auth/hooks/useAuthStore";
-import api from "../../../api/axiosClient";
+import { useEffect, useState } from "react";
+import type { Application } from "../types/Application";
+import {
+  fetchApplications,
+  deleteApplication,
+} from "../services/applicationsApi";
 import CreateApplicationModal from "../components/CreateApplicationModal";
-import NotificationToast from "../../shared/components/NotificationToast";
-
-interface Application {
-  id: string;
-  position: string;
-  company: string;
-  link: string;
-  notes: string;
-  createdAt?: string;
-}
+import EditApplicationModal from "../components/EditApplicationModal";
 
 export default function DashboardPage() {
-  const navigate = useNavigate();
-  const user = authStore.getState().user;
-  const [apps, setApps] = useState<Application[]>([]);
-  const [selectedApp, setSelectedApp] = useState<Application | null>(null);
-  const [showModal, setShowModal] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState<"Position" | "Company" | "CreatedAt">("CreatedAt");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [loading, setLoading] = useState(false);
 
-  async function loadApps() {
+  const [showCreate, setShowCreate] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [selectedApp, setSelectedApp] = useState<Application | null>(null);
+
+  const [toast, setToast] = useState<{ message: string; type: "success" | "danger" } | null>(null);
+
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [toast]);
+
+  async function load() {
+    setLoading(true);
     try {
-      const res = await api.get("/application/applications");
-      setApps(res.data);
+      const data = await fetchApplications({
+        search,
+        page,
+        pageSize,
+        sortBy,
+        sortDirection,
+      });
+      setApplications(data.items);
+      setTotal(data.totalCount);
     } catch (err) {
-      console.error(err);
+      console.error("Failed to load:", err);
+      setToast({ message: "⚠️ Грешка при зареждане", type: "danger" });
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadApps();
-  }, []);
+    load();
+  }, [page, pageSize, sortBy, sortDirection]);
 
-  async function handleLogout() {
-    const refreshToken = authStore.getState().refreshToken;
-    try {
-      await api.post("/auth/logout", { refreshToken });
-    } catch {}
-    authStore.clear();
-    navigate("/login", { replace: true });
-  }
+  useEffect(() => {
+    const delay = setTimeout(() => {
+      setPage(1);
+      load();
+    }, 400);
+    return () => clearTimeout(delay);
+  }, [search]);
 
-  async function handleDelete(id: string) {
-    if (!window.confirm("Delete this application?")) return;
+  const handleDelete = async (id: number) => {
+    if (!window.confirm("Изтриване на тази апликация?")) return;
     try {
-      await api.delete(`/application/applications/${id}`);
-      setApps(apps.filter((a) => a.id !== id));
-    } catch (err) {
-      console.error(err);
-      alert("Failed to delete application.");
+      await deleteApplication(id);
+      setToast({ message: "🗑️ Изтрито успешно!", type: "success" });
+      await load();
+    } catch {
+      setToast({ message: "⚠️ Неуспешно изтриване!", type: "danger" });
     }
-  }
+  };
+
+  const toggleSort = (field: "Position" | "Company" | "CreatedAt") => {
+    if (sortBy === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(field);
+      setSortDirection("asc");
+    }
+  };
+
+  const totalPages = Math.ceil(total / pageSize);
 
   return (
-    <div className="d-flex" style={{ minHeight: "100vh" }}>
-      {/* Sidebar */}
-      <div
-        className="bg-dark text-white p-3"
-        style={{ width: 240, display: "flex", flexDirection: "column" }}
-      >
-        <h4 className="fw-bold mb-4">📋 App Tracker</h4>
-        <button
-          className="btn btn-outline-light mb-3"
-          onClick={() => setShowModal(true)}
-        >
+    <div className="p-4">
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <h3 className="mb-0">Applications</h3>
+        <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
           ➕ New Application
         </button>
-        <button className="btn btn-outline-danger mt-auto" onClick={handleLogout}>
-          🚪 Logout
-        </button>
       </div>
 
-      {/* Main content */}
-      <div className="flex-grow-1 p-4 bg-light">
-        <h2 className="fw-bold mb-4">
-          Welcome{user ? `, ${user.email}` : ""} 👋
-        </h2>
-
-        {loading ? (
-          <div className="text-center mt-5">
-            <div className="spinner-border text-primary" role="status"></div>
-          </div>
-        ) : (
-          <div className="card shadow-sm">
-            <div className="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-              <h5 className="mb-0">My Applications</h5>
-              <small>{apps.length} total</small>
-            </div>
-            <div className="card-body p-0">
-              <table className="table table-striped mb-0">
-                <thead>
-                  <tr>
-                    <th>Position</th>
-                    <th>Company</th>
-                    <th>Link</th>
-                    <th>Notes</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {apps.length > 0 ? (
-                    apps.map((a) => (
-                      <tr key={a.id}>
-                        <td>{a.position}</td>
-                        <td>{a.company}</td>
-                        <td>
-                          <a href={a.link} target="_blank" rel="noreferrer">
-                            {a.link}
-                          </a>
-                        </td>
-                        <td>{a.notes?.slice(0, 25)}...</td>
-                        <td className="text-end">
-                          <button
-                            className="btn btn-sm btn-outline-primary me-2"
-                            onClick={() => setSelectedApp(a)}
-                          >
-                            View
-                          </button>
-                          <button
-                            className="btn btn-sm btn-outline-danger"
-                            onClick={() => handleDelete(a.id)}
-                          >
-                            🗑 Delete
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={5} className="text-center text-muted py-4">
-                        No applications yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Detail modal */}
-      {selectedApp && (
+      {/* Toast */}
+      {toast && (
         <div
-          className="modal fade show d-block"
-          tabIndex={-1}
-          style={{ background: "rgba(0,0,0,0.5)" }}
-          onClick={() => setSelectedApp(null)}
+          className={`toast align-items-center text-bg-${
+            toast.type === "success" ? "success" : "danger"
+          } show position-fixed top-0 end-0 m-3`}
+          role="alert"
+          aria-live="assertive"
+          aria-atomic="true"
+          style={{ zIndex: 1050, minWidth: "250px" }}
         >
-          <div
-            className="modal-dialog modal-dialog-centered"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">
-                  {selectedApp.position} @ {selectedApp.company}
-                </h5>
-                <button
-                  type="button"
-                  className="btn-close"
-                  onClick={() => setSelectedApp(null)}
-                ></button>
-              </div>
-              <div className="modal-body">
-                <p>
-                  <strong>Link: </strong>
-                  <a href={selectedApp.link} target="_blank" rel="noreferrer">
-                    {selectedApp.link}
-                  </a>
-                </p>
-                <p>
-                  <strong>Notes:</strong>
-                  <br />
-                  {selectedApp.notes || "—"}
-                </p>
-                {selectedApp.createdAt && (
-                  <p className="text-muted small">
-                    Created at: {new Date(selectedApp.createdAt).toLocaleString()}
-                  </p>
-                )}
-              </div>
-              <div className="modal-footer">
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setSelectedApp(null)}
-                >
-                  Close
-                </button>
-              </div>
-            </div>
+          <div className="d-flex">
+            <div className="toast-body">{toast.message}</div>
+            <button
+              type="button"
+              className="btn-close btn-close-white me-2 m-auto"
+              onClick={() => setToast(null)}
+            ></button>
           </div>
         </div>
       )}
 
-      {/* Create modal */}
+      {/* Search */}
+      <div className="mb-3">
+        <input
+          type="text"
+          className="form-control w-50"
+          placeholder="🔎 Търси по позиция или фирма..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+
+      {/* Table */}
+      {loading ? (
+        <div className="text-center py-5">Зареждане...</div>
+      ) : (
+        <table className="table table-striped table-hover">
+          <thead>
+            <tr>
+              <th onClick={() => toggleSort("Position")} style={{ cursor: "pointer" }}>
+                Position {sortBy === "Position" ? (sortDirection === "asc" ? "▲" : "▼") : ""}
+              </th>
+              <th onClick={() => toggleSort("Company")} style={{ cursor: "pointer" }}>
+                Company {sortBy === "Company" ? (sortDirection === "asc" ? "▲" : "▼") : ""}
+              </th>
+              <th>Status</th>
+              <th onClick={() => toggleSort("CreatedAt")} style={{ cursor: "pointer" }}>
+                Created {sortBy === "CreatedAt" ? (sortDirection === "asc" ? "▲" : "▼") : ""}
+              </th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {applications.map((a) => (
+              <tr key={a.id}>
+                <td>{a.position}</td>
+                <td>{a.company}</td>
+                <td>
+                  <span
+                    className={`badge bg-${
+                      a.status === "Applied"
+                        ? "secondary"
+                        : a.status === "Interview"
+                        ? "info"
+                        : a.status === "Offer"
+                        ? "success"
+                        : "danger"
+                    }`}
+                  >
+                    {a.status}
+                  </span>
+                </td>
+                <td>{new Date(a.createdAt).toLocaleDateString()}</td>
+                <td>
+                  <button
+                    className="btn btn-sm btn-outline-primary me-2"
+                    onClick={() => {
+                      setSelectedApp(a);
+                      setShowEdit(true);
+                    }}
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    className="btn btn-sm btn-outline-danger"
+                    onClick={() => handleDelete(a.id)}
+                  >
+                    🗑️
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {/* Pagination */}
+      <div className="d-flex justify-content-between align-items-center mt-3">
+        <nav>
+          <ul className="pagination mb-0">
+            <li className={`page-item ${page === 1 ? "disabled" : ""}`}>
+              <button className="page-link" onClick={() => setPage(page - 1)}>
+                ◀ Prev
+              </button>
+            </li>
+            <li className="page-item disabled">
+              <span className="page-link">
+                Страница {page} от {totalPages || 1}
+              </span>
+            </li>
+            <li className={`page-item ${page >= totalPages ? "disabled" : ""}`}>
+              <button className="page-link" onClick={() => setPage(page + 1)}>
+                Next ▶
+              </button>
+            </li>
+          </ul>
+        </nav>
+
+        <select
+          className="form-select w-auto"
+          value={pageSize}
+          onChange={(e) => {
+            setPageSize(Number(e.target.value));
+            setPage(1);
+          }}
+        >
+          {[5, 10, 20, 50].map((s) => (
+            <option key={s} value={s}>
+              {s} / страница
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Modals */}
       <CreateApplicationModal
-        show={showModal}
-        onClose={() => setShowModal(false)}
-        onCreated={loadApps}
+        show={showCreate}
+        onClose={() => setShowCreate(false)}
+        onCreated={load}
       />
-                <NotificationToast />
+      <EditApplicationModal
+        show={showEdit}
+        onClose={() => setShowEdit(false)}
+        application={selectedApp}
+        onUpdated={load}
+      />
     </div>
   );
 }

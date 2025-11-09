@@ -1,4 +1,5 @@
 using ApplicationsService.Models;
+using ApplicationsService.Services;
 using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -79,6 +80,7 @@ builder.Services.AddMassTransit(x =>
 });
 
 builder.Services.AddAuthorization();
+builder.Services.AddScoped<ApplicationService>();
 
 
 var app = builder.Build();

@@ -1,12 +1,9 @@
-﻿using System.ComponentModel.DataAnnotations;
-using ApplicationsService.Models;
-using Contracts;
+﻿using ApplicationsService.Models;
+using ApplicationsService.Services;
 using MassTransit;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-
-namespace ApplicationsService.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
@@ -15,11 +12,13 @@ public class ApplicationsController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly IPublishEndpoint _publish;
+    private readonly ApplicationService _applicationService;
 
-    public ApplicationsController(AppDbContext db, IPublishEndpoint publish)
+    public ApplicationsController(AppDbContext db, IPublishEndpoint publish, ApplicationService applicationService)
     {
         _db = db;
         _publish = publish;
+        _applicationService = applicationService;
     }
 
     private int CurrentUserId()
@@ -34,7 +33,7 @@ public class ApplicationsController : ControllerBase
         return int.Parse(subClaim.Value);
     }
 
-    // === GET /api/applications?page=1&pageSize=20 ===
+    // === GET /api/applications ===
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
@@ -52,73 +51,96 @@ public class ApplicationsController : ControllerBase
         return Ok(items);
     }
 
-    // === POST /api/applications ===
-    public record CreateReq(
-        [Required, MaxLength(100)] string Position,
-        [Required, MaxLength(100)] string Company,
-        string? Link,
-        string? Notes
-    );
-
-    [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateReq req)
+    // === GET /api/applications/search ===
+    [HttpGet("search")]
+    public async Task<IActionResult> Search(
+        [FromQuery] string? search,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string sortBy = "CreatedAt",
+        [FromQuery] string sortDirection = "desc")
     {
-        var now = DateTime.UtcNow;
+        var query = _db.Applications.AsQueryable();
 
-        var app = new Application
+        if (!string.IsNullOrWhiteSpace(search))
         {
-            Position = req.Position,
-            Company = req.Company,
-            Link = req.Link,
-            Notes = req.Notes,
-            UserId = CurrentUserId(),
-            CreatedAt = now,
-            UpdatedAt = now
+            query = query.Where(a =>
+                a.Position.Contains(search) || a.Company.Contains(search));
+        }
+
+        query = sortBy switch
+        {
+            "Position" => sortDirection == "asc"
+                ? query.OrderBy(a => a.Position)
+                : query.OrderByDescending(a => a.Position),
+            "Company" => sortDirection == "asc"
+                ? query.OrderBy(a => a.Company)
+                : query.OrderByDescending(a => a.Company),
+            _ => sortDirection == "asc"
+                ? query.OrderBy(a => a.CreatedAt)
+                : query.OrderByDescending(a => a.CreatedAt)
         };
 
-        _db.Applications.Add(app);
-        await _db.SaveChangesAsync();
+        var totalCount = await query.CountAsync();
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync();
 
-        // Publish event to RabbitMQ
-        await _publish.Publish(new ApplicationCreated(
-            app.Id,
-            app.Position,
-            app.Company,
-            app.CreatedAt
-        ));
+        return Ok(new { items, totalCount, page, pageSize });
+    }
 
-        return CreatedAtAction(nameof(GetById), new { id = app.Id }, app);
+    // === POST /api/applications ===
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] ApplicationCreateDto dto)
+    {
+        int userId = CurrentUserId();
+        var created = await _applicationService.CreateApplicationAsync(dto, userId);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
     }
 
     // === GET /api/applications/{id} ===
     [HttpGet("{id:int}")]
-    [ProducesResponseType(typeof(Application), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetById(int id)
     {
         var uid = CurrentUserId();
         var appItem = await _db.Applications.FirstOrDefaultAsync(a => a.Id == id && a.UserId == uid);
-
         return appItem is null ? NotFound() : Ok(appItem);
     }
 
     // === PATCH /api/applications/{id}/status ===
-    public record StatusReq(ApplicationStatus Status);
-
     [HttpPatch("{id:int}/status")]
-    public async Task<IActionResult> UpdateStatus(int id, [FromBody] StatusReq req)
+    public async Task<IActionResult> UpdateStatus(int id, [FromBody] ApplicationStatus status)
     {
         var uid = CurrentUserId();
         var appItem = await _db.Applications.FirstOrDefaultAsync(a => a.Id == id && a.UserId == uid);
-
         if (appItem is null)
             return NotFound();
 
-        appItem.Status = req.Status;
+        appItem.Status = status;
         appItem.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
-
         return Ok(appItem);
+    }
+
+    // === PUT /api/applications/{id} ===
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> UpdateApplication(int id, [FromBody] ApplicationUpdateDto dto)
+    {
+        var updated = await _applicationService.UpdateApplicationAsync(id, dto);
+        if (updated == null)
+            return NotFound();
+        return Ok(updated);
+    }
+
+    // === DELETE /api/applications/{id} ===
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> DeleteApplication(int id)
+    {
+        var deleted = await _applicationService.DeleteApplicationAsync(id);
+        if (!deleted)
+            return NotFound();
+        return NoContent();
     }
 }
