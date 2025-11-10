@@ -1,28 +1,34 @@
 import { useEffect, useState } from "react";
-import type { Application } from "../types/Application";
-import {
-  fetchApplications,
-  deleteApplication,
-} from "../services/applicationsApi";
+import { useDispatch, useSelector } from "react-redux";
+import { RootState, AppDispatch } from "../../../store/store";
+import { loadApplications } from "../applicationsSlice";
+import { deleteApplication } from "../services/applicationsApi";
 import CreateApplicationModal from "../components/CreateApplicationModal";
 import EditApplicationModal from "../components/EditApplicationModal";
+import { SortBy, SortDirection } from "../types/Application"; // ✅ import from shared types
 
 export default function DashboardPage() {
-  const [applications, setApplications] = useState<Application[]>([]);
-  const [total, setTotal] = useState(0);
+  const dispatch = useDispatch<AppDispatch>();
+  const { list: applications, total, loading } = useSelector(
+    (state: RootState) => state.applications
+  );
+  const { role } = useSelector((state: RootState) => state.auth);
+
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState<"Position" | "Company" | "CreatedAt">("CreatedAt");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-  const [loading, setLoading] = useState(false);
+  const [sortBy, setSortBy] = useState<SortBy>(SortBy.CreatedAt); // ✅ use enum
+  const [sortDirection, setSortDirection] = useState<SortDirection>(
+    SortDirection.Desc
+  );
 
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
-  const [selectedApp, setSelectedApp] = useState<Application | null>(null);
+  const [selectedApp, setSelectedApp] = useState<number | null>(null);
 
   const [toast, setToast] = useState<{ message: string; type: "success" | "danger" } | null>(null);
 
+  // Auto-hide toast
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(null), 3000);
@@ -30,55 +36,49 @@ export default function DashboardPage() {
     }
   }, [toast]);
 
-  async function load() {
-    setLoading(true);
-    try {
-      const data = await fetchApplications({
+  // Load data from Redux
+  useEffect(() => {
+    dispatch(
+      loadApplications({
         search,
         page,
         pageSize,
         sortBy,
         sortDirection,
-      });
-      setApplications(data.items);
-      setTotal(data.totalCount);
-    } catch (err) {
-      console.error("Failed to load:", err);
-      setToast({ message: "⚠️ Грешка при зареждане", type: "danger" });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    load();
-  }, [page, pageSize, sortBy, sortDirection]);
-
-  useEffect(() => {
-    const delay = setTimeout(() => {
-      setPage(1);
-      load();
-    }, 400);
-    return () => clearTimeout(delay);
-  }, [search]);
+      })
+    );
+  }, [dispatch, search, page, pageSize, sortBy, sortDirection]);
 
   const handleDelete = async (id: number) => {
     if (!window.confirm("Изтриване на тази апликация?")) return;
     try {
       await deleteApplication(id);
       setToast({ message: "🗑️ Изтрито успешно!", type: "success" });
-      await load();
+      dispatch(
+        loadApplications({
+          search,
+          page,
+          pageSize,
+          sortBy,
+          sortDirection,
+        })
+      );
     } catch {
       setToast({ message: "⚠️ Неуспешно изтриване!", type: "danger" });
     }
   };
 
-  const toggleSort = (field: "Position" | "Company" | "CreatedAt") => {
+  // Toggle sort direction or change field
+  const toggleSort = (field: SortBy) => {
     if (sortBy === field) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+      setSortDirection(
+        sortDirection === SortDirection.Asc
+          ? SortDirection.Desc
+          : SortDirection.Asc
+      );
     } else {
       setSortBy(field);
-      setSortDirection("asc");
+      setSortDirection(SortDirection.Asc);
     }
   };
 
@@ -93,7 +93,14 @@ export default function DashboardPage() {
         </button>
       </div>
 
-      {/* Toast */}
+      {/* Show HR info banner */}
+      {role === "HR" && (
+        <div className="alert alert-info mb-3">
+          <strong>HR mode:</strong> viewing all applications
+        </div>
+      )}
+
+      {/* Toast message */}
       {toast && (
         <div
           className={`toast align-items-center text-bg-${
@@ -115,7 +122,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Search */}
+      {/* Search box */}
       <div className="mb-3">
         <input
           type="text"
@@ -126,22 +133,22 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Table */}
+      {/* Applications table */}
       {loading ? (
         <div className="text-center py-5">Зареждане...</div>
       ) : (
         <table className="table table-striped table-hover">
           <thead>
             <tr>
-              <th onClick={() => toggleSort("Position")} style={{ cursor: "pointer" }}>
-                Position {sortBy === "Position" ? (sortDirection === "asc" ? "▲" : "▼") : ""}
+              <th onClick={() => toggleSort(SortBy.Position)} style={{ cursor: "pointer" }}>
+                Position {sortBy === SortBy.Position ? (sortDirection === SortDirection.Asc ? "▲" : "▼") : ""}
               </th>
-              <th onClick={() => toggleSort("Company")} style={{ cursor: "pointer" }}>
-                Company {sortBy === "Company" ? (sortDirection === "asc" ? "▲" : "▼") : ""}
+              <th onClick={() => toggleSort(SortBy.Company)} style={{ cursor: "pointer" }}>
+                Company {sortBy === SortBy.Company ? (sortDirection === SortDirection.Asc ? "▲" : "▼") : ""}
               </th>
               <th>Status</th>
-              <th onClick={() => toggleSort("CreatedAt")} style={{ cursor: "pointer" }}>
-                Created {sortBy === "CreatedAt" ? (sortDirection === "asc" ? "▲" : "▼") : ""}
+              <th onClick={() => toggleSort(SortBy.CreatedAt)} style={{ cursor: "pointer" }}>
+                Created {sortBy === SortBy.CreatedAt ? (sortDirection === SortDirection.Asc ? "▲" : "▼") : ""}
               </th>
               <th>Actions</th>
             </tr>
@@ -171,7 +178,7 @@ export default function DashboardPage() {
                   <button
                     className="btn btn-sm btn-outline-primary me-2"
                     onClick={() => {
-                      setSelectedApp(a);
+                      setSelectedApp(a.id);
                       setShowEdit(true);
                     }}
                   >
@@ -232,14 +239,35 @@ export default function DashboardPage() {
       <CreateApplicationModal
         show={showCreate}
         onClose={() => setShowCreate(false)}
-        onCreated={load}
+        onCreated={() =>
+          dispatch(
+            loadApplications({
+              search,
+              page,
+              pageSize,
+              sortBy,
+              sortDirection,
+            })
+          )
+        }
       />
       <EditApplicationModal
-        show={showEdit}
-        onClose={() => setShowEdit(false)}
-        application={selectedApp}
-        onUpdated={load}
-      />
+  show={showEdit}
+  onClose={() => setShowEdit(false)}
+  application={applications.find(a => a.id === selectedApp) || null}
+  onUpdated={() =>
+    dispatch(
+      loadApplications({
+        search,
+        page,
+        pageSize,
+        sortBy,
+        sortDirection,
+      })
+    )
+  }
+/>
+
     </div>
   );
 }
