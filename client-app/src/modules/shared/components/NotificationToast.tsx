@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { fetchNotifications } from "../../../api/axiosClient";
+import { getNotifications } from "../../../api/notificationsApi";
 
 export default function NotificationToast() {
   const [messages, setMessages] = useState<string[]>([]);
@@ -11,7 +11,7 @@ export default function NotificationToast() {
   
     const load = async () => {
       try {
-        const data = await fetchNotifications();
+        const data = await getNotifications();
         if (!mounted) return;
   
         if (data.length > messages.length) {

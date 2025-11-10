@@ -5,19 +5,19 @@ import { loadApplications } from "../applicationsSlice";
 import { deleteApplication } from "../services/applicationsApi";
 import CreateApplicationModal from "../components/CreateApplicationModal";
 import EditApplicationModal from "../components/EditApplicationModal";
-import { SortBy, SortDirection } from "../types/Application"; // ✅ import from shared types
+import { SortBy, SortDirection } from "../types/Application";
+import Header from "../../shared/components/Header";
 
 export default function DashboardPage() {
   const dispatch = useDispatch<AppDispatch>();
   const { list: applications, total, loading } = useSelector(
     (state: RootState) => state.applications
   );
-  const { role } = useSelector((state: RootState) => state.auth);
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState("");
-  const [sortBy, setSortBy] = useState<SortBy>(SortBy.CreatedAt); // ✅ use enum
+  const [sortBy, setSortBy] = useState<SortBy>(SortBy.CreatedAt);
   const [sortDirection, setSortDirection] = useState<SortDirection>(
     SortDirection.Desc
   );
@@ -25,10 +25,8 @@ export default function DashboardPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [selectedApp, setSelectedApp] = useState<number | null>(null);
-
   const [toast, setToast] = useState<{ message: string; type: "success" | "danger" } | null>(null);
 
-  // Auto-hide toast
   useEffect(() => {
     if (toast) {
       const timer = setTimeout(() => setToast(null), 3000);
@@ -36,7 +34,6 @@ export default function DashboardPage() {
     }
   }, [toast]);
 
-  // Load data from Redux
   useEffect(() => {
     dispatch(
       loadApplications({
@@ -68,7 +65,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Toggle sort direction or change field
   const toggleSort = (field: SortBy) => {
     if (sortBy === field) {
       setSortDirection(
@@ -86,26 +82,18 @@ export default function DashboardPage() {
 
   return (
     <div className="p-4">
+      <Header />
+
       <div className="d-flex justify-content-between align-items-center mb-3">
-        <h3 className="mb-0">Applications</h3>
+        <h3 className="mb-0">My Applications</h3>
         <button className="btn btn-primary" onClick={() => setShowCreate(true)}>
           ➕ New Application
         </button>
       </div>
 
-      {/* Show HR info banner */}
-      {role === "HR" && (
-        <div className="alert alert-info mb-3">
-          <strong>HR mode:</strong> viewing all applications
-        </div>
-      )}
-
-      {/* Toast message */}
       {toast && (
         <div
-          className={`toast align-items-center text-bg-${
-            toast.type === "success" ? "success" : "danger"
-          } show position-fixed top-0 end-0 m-3`}
+          className={`toast align-items-center text-bg-${toast.type === "success" ? "success" : "danger"} show position-fixed top-0 end-0 m-3`}
           role="alert"
           aria-live="assertive"
           aria-atomic="true"
@@ -122,7 +110,6 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Search box */}
       <div className="mb-3">
         <input
           type="text"
@@ -133,7 +120,6 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Applications table */}
       {loading ? (
         <div className="text-center py-5">Зареждане...</div>
       ) : (
@@ -197,7 +183,6 @@ export default function DashboardPage() {
         </table>
       )}
 
-      {/* Pagination */}
       <div className="d-flex justify-content-between align-items-center mt-3">
         <nav>
           <ul className="pagination mb-0">
@@ -235,7 +220,6 @@ export default function DashboardPage() {
         </select>
       </div>
 
-      {/* Modals */}
       <CreateApplicationModal
         show={showCreate}
         onClose={() => setShowCreate(false)}
@@ -252,22 +236,21 @@ export default function DashboardPage() {
         }
       />
       <EditApplicationModal
-  show={showEdit}
-  onClose={() => setShowEdit(false)}
-  application={applications.find(a => a.id === selectedApp) || null}
-  onUpdated={() =>
-    dispatch(
-      loadApplications({
-        search,
-        page,
-        pageSize,
-        sortBy,
-        sortDirection,
-      })
-    )
-  }
-/>
-
+        show={showEdit}
+        onClose={() => setShowEdit(false)}
+        application={applications.find((a) => a.id === selectedApp) || null}
+        onUpdated={() =>
+          dispatch(
+            loadApplications({
+              search,
+              page,
+              pageSize,
+              sortBy,
+              sortDirection,
+            })
+          )
+        }
+      />
     </div>
   );
 }

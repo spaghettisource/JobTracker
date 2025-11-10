@@ -1,73 +1,68 @@
-
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../../api/axiosClient";
 import { authStore } from "../hooks/useAuthStore";
-
+import { jwtDecode } from "jwt-decode";
 
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [email, setUsernameOrEmail] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  async function onSubmit(e: React.FormEvent) {
+  async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    setErrorMsg(null);
-    setLoading(true);
 
     try {
       const res = await api.post("/identity/auth/login", { email, password });
-      const { accessToken, refreshToken, user } = res.data || {};
-      if (!accessToken) throw new Error("No accessToken in response");
+      const token = res.data.token;
 
-      authStore.setTokens(accessToken, refreshToken);
-      if (user) authStore.setUser(user);
+      // Decode token to extract role, email, userId
+      const decoded: any = jwtDecode(token);
+      const role =
+        decoded["role"] ||
+        decoded["http://schemas.microsoft.com/ws/2008/06/identity/claims/role"];
+      const userId = decoded["sub"];
+      const userEmail = decoded["email"];
 
+      // Save to authStore
+      authStore.setTokens(token);
+      authStore.setUser({ id: userId, email: userEmail, roles: [role] });
+
+      // Also keep in localStorage for refresh persistence
+      localStorage.setItem("token", token);
+      localStorage.setItem("role", role);
+      localStorage.setItem("email", userEmail);
+      localStorage.setItem("userId", userId);
+
+      console.log("✅ Logged in:", { userEmail, role });
       navigate("/dashboard");
-    } catch (err: any) {
-      const serverMessage =
-        err?.response?.data?.message || err?.message || "Login failed";
-      setErrorMsg(serverMessage);
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      console.error(err);
+      alert("Invalid credentials");
     }
   }
 
   return (
-    <div style={{ maxWidth: 420, margin: "64px auto", padding: 24, border: "1px solid #eee", borderRadius: 12 }}>
-      <h2 style={{ marginBottom: 16 }}>Sign in</h2>
-      <form onSubmit={onSubmit}>
-        <label style={{ display: "block", marginBottom: 8 }}>
-          Username or Email
-          <input
-            type="text"
-            value={email}
-            onChange={(e) => setUsernameOrEmail(e.target.value)}
-            required
-            style={{ width: "100%", padding: 8, marginTop: 4 }}
-          />
-        </label>
-
-        <label style={{ display: "block", marginBottom: 8 }}>
-          Password
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            style={{ width: "100%", padding: 8, marginTop: 4 }}
-          />
-        </label>
-
-        {errorMsg && (
-          <div style={{ color: "crimson", marginBottom: 8 }}>{errorMsg}</div>
-        )}
-
-        <button type="submit" disabled={loading} style={{ padding: "10px 16px" }}>
-          {loading ? "Signing in..." : "Sign in"}
-        </button>
+    <div className="container mt-5">
+      <h3>Login</h3>
+      <form onSubmit={handleLogin}>
+        <input
+          id="email"
+          type="email"
+          className="form-control mb-2"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <input
+          id="password"
+          type="password"
+          className="form-control mb-2"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        <button className="btn btn-primary w-100">Login</button>
       </form>
     </div>
   );

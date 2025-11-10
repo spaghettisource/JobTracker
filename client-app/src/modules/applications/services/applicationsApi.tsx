@@ -54,3 +54,8 @@ export async function updateApplication(
 export async function deleteApplication(id: number): Promise<void> {
   await api.delete(`/applications/${id}`);
 }
+
+export async function fetchAllApplications(): Promise<{ items: Application[] }> {
+  const res = await api.get("/application/applications/all");
+  return res.data;
+}

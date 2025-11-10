@@ -10,6 +10,7 @@ export type User = {
     accessToken: string | null;
     refreshToken: string | null;
     user: User | null;
+    role: "HR" | "Candidate" | null;
   };
   
   type Listener = (state: AuthState) => void;
@@ -27,6 +28,7 @@ export type User = {
       typeof window !== "undefined" && localStorage.getItem(STORAGE_KEYS.user)
         ? JSON.parse(localStorage.getItem(STORAGE_KEYS.user) as string)
         : null,
+    role: null
   };
   
   let state: AuthState = { ...initialState };
