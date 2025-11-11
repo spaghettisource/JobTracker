@@ -5,6 +5,8 @@ using IdentityService.Contracts;
 using IdentityService.Models;
 using IdentityService.Services;
 using Microsoft.AspNetCore.Authorization;
+using MassTransit;
+using Contracts;
 
 namespace IdentityService.Controllers;
 
@@ -14,12 +16,17 @@ public class AuthController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly JwtTokenService _jwt;
+    private readonly IPublishEndpoint _publish;
+    private readonly RedisCacheService _cache;
 
-    public AuthController(AppDbContext db, JwtTokenService jwt)
+    public AuthController(AppDbContext db, JwtTokenService jwt, RedisCacheService cache)
     {
         _db = db;
         _jwt = jwt;
+        _cache = cache;
     }
+
+    // in Register:
 
     private string GenerateRefreshToken()
     {
@@ -46,6 +53,13 @@ public class AuthController : ControllerBase
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
 
+        await _publish.Publish(new UserCreated(
+            user.Id,
+            user.Email,
+            user.Role,
+            user.CreatedAt
+        ));
+
         var token = _jwt.CreateToken(user.Id.ToString(), user.Email, user.Role);
         var refresh = new RefreshToken
         {
@@ -56,6 +70,7 @@ public class AuthController : ControllerBase
 
         _db.RefreshTokens.Add(refresh);
         await _db.SaveChangesAsync();
+        await _cache.AddOrUpdateUserAsync(user);
 
         return Ok(new { token, refreshToken = refresh.Token });
     }
@@ -99,7 +114,6 @@ public class AuthController : ControllerBase
         if (existing is null || existing.ExpiresAt < DateTime.UtcNow)
             return Unauthorized("Invalid or expired refresh token.");
 
-        // revoke old token
         existing.Revoked = true;
 
         var newRefresh = new RefreshToken

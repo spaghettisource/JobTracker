@@ -1,47 +1,44 @@
 using MassTransit;
+using StackExchange.Redis;
 using NotificationsService.Consumers;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowFrontend",
-        policy => policy
-            .WithOrigins("http://localhost:3000") // React dev server
-            .AllowAnyHeader()
-            .AllowAnyMethod());
-});
-
 builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
+// --- Redis ---
+builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+    ConnectionMultiplexer.Connect(builder.Configuration["Redis:ConnectionString"]));
+
+// --- MassTransit + RabbitMQ ---
 builder.Services.AddMassTransit(x =>
 {
-    x.AddConsumer<ApplicationCreatedConsumer>();
+    x.AddConsumer<UserCreatedConsumer>();
 
     x.UsingRabbitMq((context, cfg) =>
     {
-        cfg.Host("localhost", "/", h =>
+        cfg.Host(builder.Configuration["RabbitMQ:Host"], h =>
         {
-            h.Username("guest");
-            h.Password("guest");
+            h.Username(builder.Configuration["RabbitMQ:Username"]);
+            h.Password(builder.Configuration["RabbitMQ:Password"]);
         });
 
-        cfg.ReceiveEndpoint("application_created_queue", e =>
+        cfg.ReceiveEndpoint("user-created-cache", e =>
         {
-            e.ConfigureConsumer<ApplicationCreatedConsumer>(context);
+            e.ConfigureConsumer<UserCreatedConsumer>(context);
         });
     });
 });
 
 var app = builder.Build();
 
-app.UseCors("AllowFrontend");
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
 app.MapControllers();
-
-app.MapGet("/api/notifications", () =>
-{
-    return ApplicationCreatedConsumer.GetAndClear();
-});
-
 app.Run();

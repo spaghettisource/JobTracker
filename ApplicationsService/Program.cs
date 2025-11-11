@@ -1,10 +1,11 @@
-using ApplicationsService.Models;
+﻿using ApplicationsService.Models;
 using ApplicationsService.Services;
 using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
+using System.Security.Claims;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -29,7 +30,7 @@ builder.Services.AddSwaggerGen(c =>
         Description = "Put **_ONLY_** your JWT Bearer token here (without 'Bearer ' prefix).",
         Reference = new Microsoft.OpenApi.Models.OpenApiReference
         {
-            Id = Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme,
+            Id = JwtBearerDefaults.AuthenticationScheme,
             Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme
         }
     };
@@ -63,10 +64,14 @@ builder.Services
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(
                 Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)
-            )
+            ),
+            RoleClaimType = ClaimTypes.Role // 🟢 важно за [Authorize(Roles = "...")]
         };
     });
 
+builder.Services.AddAuthorization();
+
+// --- MassTransit (RabbitMQ) ---
 builder.Services.AddMassTransit(x =>
 {
     x.UsingRabbitMq((context, cfg) =>
@@ -79,13 +84,11 @@ builder.Services.AddMassTransit(x =>
     });
 });
 
-builder.Services.AddAuthorization();
 builder.Services.AddScoped<ApplicationService>();
-
 
 var app = builder.Build();
 
-// --- Middlewares ---
+// --- Middleware ---
 app.UseSerilogRequestLogging();
 
 if (app.Environment.IsDevelopment())
@@ -94,15 +97,13 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseAuthentication();   // 🟢 преди контролерите
+app.UseAuthorization();
+
 app.MapHealthChecks("/health");
 app.MapControllers();
 
-app.UseAuthentication();
-app.UseAuthorization();
-
-
 app.Run();
-
 
 public class AppDbContext(DbContextOptions<AppDbContext> o) : DbContext(o)
 {

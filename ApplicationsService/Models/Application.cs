@@ -1,4 +1,6 @@
-﻿namespace ApplicationsService.Models;
+﻿using IdentityService.Models;
+
+namespace ApplicationsService.Models;
 
 public enum ApplicationStatus { Applied, Interview, Offer, Rejected }
 
@@ -13,4 +15,5 @@ public class Application
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     public int UserId { get; set; }             // от JWT (sub)
+    public User User { get; set; } = null!;
 }

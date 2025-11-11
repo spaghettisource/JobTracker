@@ -4,6 +4,14 @@ import { RootState, AppDispatch } from "../../../store/store";
 import { loadApplications } from "../../applications/applicationsSlice";
 import { SortBy, SortDirection } from "../../applications/types/Application";
 import Header from "../../shared/components/Header";
+import { getCachedUsers } from "../../../api/usersApi";
+
+type CachedUser = {
+  id: number;
+  email: string;
+  role: string;
+  createdAt: string;
+};
 
 export default function HrDashboardPage() {
   const dispatch = useDispatch<AppDispatch>();
@@ -16,10 +24,17 @@ export default function HrDashboardPage() {
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortBy>(SortBy.CreatedAt);
   const [sortDirection, setSortDirection] = useState<SortDirection>(SortDirection.Desc);
+  const [cachedUsers, setCachedUsers] = useState<CachedUser[]>([]);
 
+  // 🔹 Load applications
   useEffect(() => {
     dispatch(loadApplications({ search, page, pageSize, sortBy, sortDirection }));
   }, [dispatch, search, page, pageSize, sortBy, sortDirection]);
+
+  // 🔹 Load cached users
+  useEffect(() => {
+    getCachedUsers().then(setCachedUsers).catch(console.error);
+  }, []);
 
   const toggleSort = (field: SortBy) => {
     if (sortBy === field) {
@@ -28,6 +43,11 @@ export default function HrDashboardPage() {
       setSortBy(field);
       setSortDirection(SortDirection.Asc);
     }
+  };
+
+  const getUserEmail = (userId: number) => {
+    const u = cachedUsers.find((u) => u.id === userId);
+    return u ? u.email : "—";
   };
 
   return (
@@ -45,7 +65,7 @@ export default function HrDashboardPage() {
               <th onClick={() => toggleSort(SortBy.Position)} style={{ cursor: "pointer" }}>Position</th>
               <th onClick={() => toggleSort(SortBy.Company)} style={{ cursor: "pointer" }}>Company</th>
               <th>Status</th>
-              <th>User</th>
+              <th>User Email</th>
               <th onClick={() => toggleSort(SortBy.CreatedAt)} style={{ cursor: "pointer" }}>Created</th>
             </tr>
           </thead>
@@ -69,7 +89,7 @@ export default function HrDashboardPage() {
                     {a.status}
                   </span>
                 </td>
-                <td>{a.userId}</td>
+                <td>{getUserEmail(a.userId)}</td>
                 <td>{new Date(a.createdAt).toLocaleDateString()}</td>
               </tr>
             ))}

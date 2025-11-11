@@ -4,6 +4,7 @@ import LoginPage from "./modules/auth/pages/LoginPage";
 import DashboardPage from "./modules/applications/pages/DashboardPage";
 import ProtectedRoute from "./modules/shared/components/ProtectedRoute";
 import { useAuthInitializer } from "./modules/auth/hooks/useAuthInitializer";
+import HrDashboardPage from "./modules/applications/pages/HrDashboardPage";
 
 function App() {
   // initialize auth store on app start
@@ -18,6 +19,14 @@ function App() {
           element={
             <ProtectedRoute>
               <DashboardPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/hrdashboard"
+          element={
+            <ProtectedRoute>
+              <HrDashboardPage />
             </ProtectedRoute>
           }
         />

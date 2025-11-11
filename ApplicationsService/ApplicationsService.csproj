@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Contracts\Contracts.csproj" />
+    <ProjectReference Include="..\IdentityService\IdentityService.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,9 +1,12 @@
-using Microsoft.IdentityModel.Tokens;
+﻿using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using IdentityService.Models;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using MassTransit;
+using IdentityService.Services;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,14 +18,13 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddHealthChecks();
-builder.Services.AddSingleton<IdentityService.Services.JwtTokenService>();
-
+builder.Services.AddSingleton<JwtTokenService>();
 
 // --- DbContext ---
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 
-// Auth (JWT)
+// --- Auth (JWT) ---
 builder.Services
   .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
   .AddJwtBearer(options =>
@@ -42,10 +44,27 @@ builder.Services
 
 builder.Services.AddAuthorization();
 
+// --- Redis ---
+builder.Services.AddSingleton<IConnectionMultiplexer>(sp =>
+    ConnectionMultiplexer.Connect(builder.Configuration.GetConnectionString("Redis")));
+
+builder.Services.AddScoped<RedisCacheService>();
+
+// --- MassTransit (RabbitMQ) ---
+builder.Services.AddMassTransit(x =>
+{
+    x.UsingRabbitMq((context, cfg) =>
+    {
+        cfg.Host(builder.Configuration["RabbitMQ:Host"], h =>
+        {
+            h.Username(builder.Configuration["RabbitMQ:Username"]);
+            h.Password(builder.Configuration["RabbitMQ:Password"]);
+        });
+    });
+});
 
 var app = builder.Build();
 
-// --- Middlewares ---
 app.UseSerilogRequestLogging();
 
 if (app.Environment.IsDevelopment())
@@ -54,22 +73,34 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.MapHealthChecks("/health");
-app.MapControllers();
-
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapHealthChecks("/health");
+app.MapControllers();
 
-app.Run();
+// --- Preload Redis Cache (users) ---
+using (var scope = app.Services.CreateScope())
+{
+    var preload = scope.ServiceProvider.GetRequiredService<RedisCacheService>();
+    try
+    {
+        await preload.PreloadUsersAsync();
+        Console.WriteLine("✅ Redis cache preloaded with users.");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"⚠️ Failed to preload Redis cache: {ex.Message}");
+    }
+}
 
+await app.RunAsync();
 
-// --- Simple DbContext for now ---
+// --- Simple DbContext ---
 public class AppDbContext : DbContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
     public DbSet<User> Users => Set<User>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
-
 }

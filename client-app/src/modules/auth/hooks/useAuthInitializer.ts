@@ -1,7 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { authStore } from "./useAuthStore";
 
 export function useAuthInitializer() {
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
     const token = localStorage.getItem("token");
     const refresh = localStorage.getItem("refreshToken");
@@ -17,7 +19,10 @@ export function useAuthInitializer() {
         roles: role ? [role] : [],
       });
     }
-  }, []);
-}
 
-export {};
+    // маркираме, че сме готови
+    setLoading(false);
+  }, []);
+
+  return loading;
+}

@@ -1,4 +1,5 @@
 version: "3.9"
+
 services:
   pg-identity:
     image: postgres:16
@@ -6,8 +7,10 @@ services:
       POSTGRES_USER: identity
       POSTGRES_PASSWORD: identitypwd
       POSTGRES_DB: identitydb
-    ports: [ "5433:5432" ]
-    volumes: [ "pg_identity:/var/lib/postgresql/data" ]
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_identity:/var/lib/postgresql/data
 
   pg-apps:
     image: postgres:16
@@ -15,20 +18,38 @@ services:
       POSTGRES_USER: apps
       POSTGRES_PASSWORD: appspwd
       POSTGRES_DB: appsdb
-    ports: [ "5434:5432" ]
-    volumes: [ "pg_apps:/var/lib/postgresql/data" ]
+    ports:
+      - "5434:5432"
+    volumes:
+      - pg_apps:/var/lib/postgresql/data
 
   rabbitmq:
     image: rabbitmq:3-management
+    container_name: rabbitmq
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "5672:5672"     # за микросървисите (AMQP)
+      - "15672:15672"   # за UI (http://localhost:15672)
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
 
   seq:
     image: datalust/seq:2024
     environment:
       ACCEPT_EULA: "Y"
-    ports: [ "5341:80" ]
+    ports:
+      - "5341:80"
+
 volumes:
-  pg_identity: {}
-  pg_apps: {}
+  pg_identity:
+  pg_apps:
+  redis_data:
